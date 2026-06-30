@@ -5,6 +5,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/vijay-talsangi/Renewly/config"
 	"github.com/vijay-talsangi/Renewly/controllers"
+	db "github.com/vijay-talsangi/Renewly/db/sqlc"
 	"github.com/vijay-talsangi/Renewly/services"
 )
 
@@ -16,11 +17,20 @@ func main() {
 	config.ConnectDatabase()
 	defer config.DBConfig.Close()
 
+	queries := db.New(config.DBConfig)
+
+	userService := services.NewUserService(queries)
+
+	userController := controllers.NewUserController(userService)
+
 	r := gin.Default()
 
-	userService := &services.UserService{}
-	userController := controllers.NewUserController(userService)
-	userController.RegisterRoutes(r)
+	api := r.Group("/api")
+	{
+		api.POST("/register", userController.Register)
+		api.POST("/login", userController.Login)
+		api.POST("/logout", userController.Logout)
+	}
 
 	r.Run(":8080")
 }
