@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"github.com/vijay-talsangi/Renewly/config"
@@ -32,5 +34,10 @@ func main() {
 		api.POST("/logout", userController.Logout)
 	}
 
-	r.Run(":8080")
+	PORT := os.Getenv("PORT")
+	if PORT == "" {
+		PORT = "8080"
+	}
+
+	r.Run(":" + PORT)
 }
