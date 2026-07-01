@@ -13,14 +13,15 @@ var (
 )
 
 type CreateSubscriptionInput struct {
-	UserID          int64           `json:"user_id" binding:"required"`
-	Name            string          `json:"plan" binding:"required"`
+	UserID          int64           `json:"-" binding:"-"`
+	Name            string          `json:"name" binding:"required"`
 	Category        string          `json:"category" binding:"required"`
 	Website         pgtype.Text     `json:"website"`
 	Note            pgtype.Text     `json:"notes"`
 	Amount          pgtype.Numeric  `json:"amount" binding:"required"`
 	Currency        string          `json:"currency" binding:"required"`
 	BillingCycle    db.BillingCycle `json:"billing_cycle" binding:"required"`
+	AutoRenew       bool            `json:"auto_renew" binding:"required"`
 	StartDate       pgtype.Date     `json:"start_date" binding:"required"`
 	NextBillingDate pgtype.Date     `json:"next_billing_date" binding:"required"`
 }
@@ -43,6 +44,7 @@ func (ss *SubscriptionService) CreateSubscription(ctx context.Context, input Cre
 		Amount:          input.Amount,
 		Currency:        input.Currency,
 		BillingCycle:    input.BillingCycle,
+		AutoRenew:       input.AutoRenew,
 		StartDate:       input.StartDate,
 		NextBillingDate: input.NextBillingDate,
 	})

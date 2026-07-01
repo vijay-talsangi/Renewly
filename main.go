@@ -8,6 +8,7 @@ import (
 	"github.com/vijay-talsangi/Renewly/config"
 	"github.com/vijay-talsangi/Renewly/controllers"
 	db "github.com/vijay-talsangi/Renewly/db/sqlc"
+	"github.com/vijay-talsangi/Renewly/middleware"
 	"github.com/vijay-talsangi/Renewly/services"
 )
 
@@ -22,8 +23,10 @@ func main() {
 	queries := db.New(config.DBConfig)
 
 	userService := services.NewUserService(queries)
+	subscriptionService := services.NewSubscriptionService(queries)
 
 	userController := controllers.NewUserController(userService)
+	subscriptionController := controllers.NewSubscriptionController(subscriptionService)
 
 	r := gin.Default()
 
@@ -32,6 +35,12 @@ func main() {
 		api.POST("/register", userController.Register)
 		api.POST("/login", userController.Login)
 		api.POST("/logout", userController.Logout)
+	}
+
+	authorized := r.Group("/api")
+	authorized.Use(middleware.AuthFromCookie())
+	{
+		authorized.POST("/subscriptions", subscriptionController.CreateSubscription)
 	}
 
 	PORT := os.Getenv("PORT")
