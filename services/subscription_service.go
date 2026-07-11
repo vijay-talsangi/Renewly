@@ -51,3 +51,16 @@ func (ss *SubscriptionService) CreateSubscription(ctx context.Context, input Cre
 
 	return err
 }
+
+func (ss *SubscriptionService) GetAllSubscriptions(ctx context.Context, userID int64) ([]db.Subscription, error) {
+	subscriptions, err := ss.q.ListSubscriptions(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(subscriptions) == 0 {
+		return nil, ErrSubscriptionNotFound
+	}
+
+	return subscriptions, nil
+}

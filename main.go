@@ -41,6 +41,7 @@ func main() {
 	authorized.Use(middleware.AuthFromCookie())
 	{
 		authorized.POST("/subscriptions", subscriptionController.CreateSubscription)
+		authorized.GET("/subscriptions", subscriptionController.GetAllSubscriptions)
 	}
 
 	PORT := os.Getenv("PORT")

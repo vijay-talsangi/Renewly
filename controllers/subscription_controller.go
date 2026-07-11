@@ -46,3 +46,26 @@ func (sc *SubscriptionController) CreateSubscription(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, gin.H{"message": "Subscription created successfully"})
 }
+
+func (sc *SubscriptionController) GetAllSubscriptions(c *gin.Context) {
+	userIDValue, exists := c.Get(middleware.ContextUserIDKey)
+
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	userID, ok := userIDValue.(int64)
+	if !ok || userID <= 0 {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	subscriptions, err := sc.ss.GetAllSubscriptions(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve subscriptions"})
+		return
+	}
+
+	c.JSON(http.StatusOK, subscriptions)
+}
