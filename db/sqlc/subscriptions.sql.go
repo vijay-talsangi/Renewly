@@ -181,6 +181,7 @@ website=$10,
 notes=$11,
 updated_at=NOW()
 WHERE id=$1
+AND user_id=$12
 RETURNING id, user_id, name, category, amount, currency, billing_cycle, start_date, next_billing_date, auto_renew, website, notes, status, created_at, updated_at
 `
 
@@ -196,6 +197,7 @@ type UpdateSubscriptionParams struct {
 	AutoRenew       bool
 	Website         pgtype.Text
 	Notes           pgtype.Text
+	UserID          int64
 }
 
 func (q *Queries) UpdateSubscription(ctx context.Context, arg UpdateSubscriptionParams) (Subscription, error) {
@@ -211,6 +213,7 @@ func (q *Queries) UpdateSubscription(ctx context.Context, arg UpdateSubscription
 		arg.AutoRenew,
 		arg.Website,
 		arg.Notes,
+		arg.UserID,
 	)
 	var i Subscription
 	err := row.Scan(

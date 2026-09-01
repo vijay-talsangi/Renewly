@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vijay-talsangi/Renewly/middleware"
@@ -68,4 +69,37 @@ func (sc *SubscriptionController) GetAllSubscriptions(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, subscriptions)
+}
+
+func (sc *SubscriptionController) UpdateSubscription(c *gin.Context) {
+	userIDValue, exists := c.Get(middleware.ContextUserIDKey)
+
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	userID, ok := userIDValue.(int64)
+	if !ok || userID <= 0 {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	var input services.UpdateSubscriptionInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	subID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Subscription Id must be Integer"})
+		return
+	}
+
+	if err := sc.ss.UpdateSubscription(c.Request.Context(), userID, subID, input); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to Update Subscription"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Updated Successfully"})
 }

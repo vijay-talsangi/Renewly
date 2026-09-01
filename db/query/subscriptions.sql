@@ -44,6 +44,7 @@ website=$10,
 notes=$11,
 updated_at=NOW()
 WHERE id=$1
+AND user_id=$12
 RETURNING *;
 
 -- name: CancelSubscription :exec

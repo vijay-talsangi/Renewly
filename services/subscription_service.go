@@ -8,12 +8,23 @@ import (
 	db "github.com/vijay-talsangi/Renewly/db/sqlc"
 )
 
-var (
-	ErrSubscriptionNotFound = errors.New("subscription not found")
-)
+var ErrSubscriptionNotFound = errors.New("subscription not found")
 
 type CreateSubscriptionInput struct {
 	UserID          int64           `json:"-" binding:"-"`
+	Name            string          `json:"name" binding:"required"`
+	Category        string          `json:"category" binding:"required"`
+	Website         pgtype.Text     `json:"website"`
+	Note            pgtype.Text     `json:"notes"`
+	Amount          pgtype.Numeric  `json:"amount" binding:"required"`
+	Currency        string          `json:"currency" binding:"required"`
+	BillingCycle    db.BillingCycle `json:"billing_cycle" binding:"required"`
+	AutoRenew       bool            `json:"auto_renew" binding:"required"`
+	StartDate       pgtype.Date     `json:"start_date" binding:"required"`
+	NextBillingDate pgtype.Date     `json:"next_billing_date" binding:"required"`
+}
+
+type UpdateSubscriptionInput struct {
 	Name            string          `json:"name" binding:"required"`
 	Category        string          `json:"category" binding:"required"`
 	Website         pgtype.Text     `json:"website"`
@@ -63,4 +74,23 @@ func (ss *SubscriptionService) GetAllSubscriptions(ctx context.Context, userID i
 	}
 
 	return subscriptions, nil
+}
+
+func (ss *SubscriptionService) UpdateSubscription(ctx context.Context, userID int64, subID int64, input UpdateSubscriptionInput) error {
+	_, err := ss.q.UpdateSubscription(ctx, db.UpdateSubscriptionParams{
+		ID:              subID,
+		UserID:          userID,
+		Name:            input.Name,
+		Category:        input.Category,
+		Website:         input.Website,
+		Notes:           input.Note,
+		Amount:          input.Amount,
+		Currency:        input.Currency,
+		BillingCycle:    input.BillingCycle,
+		AutoRenew:       input.AutoRenew,
+		StartDate:       input.StartDate,
+		NextBillingDate: input.NextBillingDate,
+	})
+
+	return err
 }
