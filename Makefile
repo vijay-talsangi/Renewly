@@ -11,3 +11,8 @@ sqlc:
 
 new-migration:
 	goose -dir db/migration create $(name) sql
+
+.PHONY: test-email
+
+test-email:
+	go run ./cmd/test_email
