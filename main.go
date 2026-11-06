@@ -1,53 +1,33 @@
 package main
 
 import (
+	"log"
 	"os"
 
-	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+
 	"github.com/vijay-talsangi/Renewly/config"
-	"github.com/vijay-talsangi/Renewly/controllers"
 	db "github.com/vijay-talsangi/Renewly/db/sqlc"
-	"github.com/vijay-talsangi/Renewly/middleware"
-	"github.com/vijay-talsangi/Renewly/services"
+	"github.com/vijay-talsangi/Renewly/internal/server"
 )
 
 func main() {
 	if err := godotenv.Load(); err != nil {
-		panic("Error loading .env file")
+		log.Println("No .env file found; using environment variables")
 	}
 
 	config.ConnectDatabase()
 	defer config.DBConfig.Close()
 
 	queries := db.New(config.DBConfig)
+	router := server.SetupRouter(queries)
 
-	userService := services.NewUserService(queries)
-	subscriptionService := services.NewSubscriptionService(queries)
-
-	userController := controllers.NewUserController(userService)
-	subscriptionController := controllers.NewSubscriptionController(subscriptionService)
-
-	r := gin.Default()
-
-	api := r.Group("/api")
-	{
-		api.POST("/register", userController.Register)
-		api.POST("/login", userController.Login)
-		api.POST("/logout", userController.Logout)
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
 	}
 
-	authorized := r.Group("/api")
-	authorized.Use(middleware.AuthFromCookie())
-	{
-		authorized.POST("/subscriptions", subscriptionController.CreateSubscription)
-		authorized.GET("/subscriptions", subscriptionController.GetAllSubscriptions)
+	if err := router.Run(":" + port); err != nil {
+		log.Fatalf("Server failed: %v", err)
 	}
-
-	PORT := os.Getenv("PORT")
-	if PORT == "" {
-		PORT = "8080"
-	}
-
-	r.Run(":" + PORT)
 }
