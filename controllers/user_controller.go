@@ -1,17 +1,31 @@
+// Package controllers handles http requests
 package controllers
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vijay-talsangi/Renewly/services"
 )
 
-type UserController struct {
-	userService *services.UserService
+type UserServiceInterface interface {
+	Register(
+		ctx context.Context,
+		input services.RegisterInput,
+	) error
+
+	Login(
+		ctx context.Context,
+		input services.LoginInput,
+	) (string, error)
 }
 
-func NewUserController(userService *services.UserService) *UserController {
+type UserController struct {
+	userService UserServiceInterface
+}
+
+func NewUserController(userService UserServiceInterface) *UserController {
 	return &UserController{
 		userService: userService,
 	}
@@ -42,7 +56,6 @@ func (uc *UserController) Login(c *gin.Context) {
 	}
 
 	token, err := uc.userService.Login(c.Request.Context(), input)
-
 	if err != nil {
 		if err == services.ErrInvalidCredentials {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
