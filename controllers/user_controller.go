@@ -4,6 +4,8 @@ package controllers
 import (
 	"context"
 	"net/http"
+	"os"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vijay-talsangi/Renewly/services"
@@ -29,6 +31,13 @@ func NewUserController(userService UserServiceInterface) *UserController {
 	return &UserController{
 		userService: userService,
 	}
+}
+
+func secureCookie() bool {
+	return strings.EqualFold(
+		strings.TrimSpace(os.Getenv("COOKIE_SECURE")),
+		"true",
+	)
 }
 
 func (uc *UserController) Register(c *gin.Context) {
@@ -72,8 +81,8 @@ func (uc *UserController) Login(c *gin.Context) {
 		60*60*24,
 		"/",
 		"",
-		false, // true in HTTPS production
-		true,  // httpOnly
+		secureCookie(), // true in HTTPS production
+		true,           // httpOnly
 	)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Login successful"})
@@ -86,8 +95,8 @@ func (uc *UserController) Logout(c *gin.Context) {
 		-1,
 		"/",
 		"",
-		false, // true in HTTPS production
-		true,  // httpOnly
+		secureCookie(), // true in HTTPS production
+		true,           // httpOnly
 	)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Logout successful"})

@@ -2,6 +2,8 @@
 package server
 
 import (
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 	"github.com/vijay-talsangi/Renewly/controllers"
 	db "github.com/vijay-talsangi/Renewly/db/sqlc"
@@ -17,6 +19,12 @@ func SetupRouter(queries *db.Queries) *gin.Engine {
 	subscriptionController := controllers.NewSubscriptionController(subscriptionService)
 
 	r := gin.Default()
+
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "ok",
+		})
+	})
 
 	api := r.Group("/api")
 	{

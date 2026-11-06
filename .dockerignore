@@ -1,0 +1,27 @@
+# Environment variables and secrets
+.env
+.env.*
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+
+# OS files
+.DS_Store
+
+# Build artifacts
+bin/
+tmp/
+coverage/
+coverage.out
+coverage.html
+
+# Local dependencies
+vendor/
+
+# Documentation
+README.md
