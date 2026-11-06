@@ -1,0 +1,54 @@
+steps:
+  # 1. Run Go tests
+  - name: golang:1.26.4
+    entrypoint: go
+    args:
+      - test
+      - ./...
+
+  # 2. Build Docker image
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:$SHORT_SHA
+      - .
+
+  # 3. Push image to Artifact Registry
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:$SHORT_SHA
+
+  # 4. Deploy to Cloud Run
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:$SHORT_SHA
+      - --region=${_REGION}
+      - --platform=managed
+      - --service-account=${_RUNTIME_SA}
+      - --allow-unauthenticated
+      - --port=8080
+      - --memory=512Mi
+      - --cpu=1
+      - --min=0
+      - --max=3
+      - --timeout=60
+      - --set-env-vars=GIN_MODE=release,COOKIE_SECURE=true,DB_POOL_MAX_CONNS=5,DB_POOL_MIN_CONNS=0,EMAIL_FROM=${_EMAIL_FROM}
+      - --set-secrets=DATABASE_URL=renewly-database-url:latest,JWT_SECRET=renewly-jwt-secret:latest
+
+substitutions:
+  _REGION: asia-south1
+  _AR_REPO: renewly-repo
+  _SERVICE: renewly-api
+  _RUNTIME_SA: renewly-runtime@gen-lang-client-0644475723.iam.gserviceaccount.com
+  _EMAIL_FROM: 'Renewly Reminders <renewly-reminders@vebit.app'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 1200s
