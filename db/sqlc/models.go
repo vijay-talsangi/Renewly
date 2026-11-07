@@ -113,6 +113,22 @@ type Subscription struct {
 	UpdatedAt       pgtype.Timestamptz
 }
 
+type SubscriptionReminder struct {
+	ID             int64
+	SubscriptionID int64
+	RenewalDate    pgtype.Date
+	DaysBefore     int16
+	Status         string
+	ResendEmailID  pgtype.Text
+	Attempts       int16
+	LastError      pgtype.Text
+	NextAttemptAt  pgtype.Timestamptz
+	LockedUntil    pgtype.Timestamptz
+	SentAt         pgtype.Timestamptz
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+}
+
 type User struct {
 	ID           int64
 	Name         string

@@ -86,6 +86,16 @@ func (s *EmailService) SendRenewalReminder(
 	ctx context.Context,
 	reminder RenewalReminder,
 ) (string, error) {
+	return s.SendRenewalReminderWithIdempotencyKey(ctx, reminder, "")
+}
+
+// SendRenewalReminderWithIdempotencyKey sends a reminder with an optional
+// provider-side idempotency key. Resend retains idempotency keys for 24 hours.
+func (s *EmailService) SendRenewalReminderWithIdempotencyKey(
+	ctx context.Context,
+	reminder RenewalReminder,
+	idempotencyKey string,
+) (string, error) {
 	if strings.TrimSpace(reminder.To) == "" {
 		return "", fmt.Errorf("recipient email is required")
 	}
@@ -192,6 +202,12 @@ func (s *EmailService) SendRenewalReminder(
 	req.Header.Set("Authorization", "Bearer "+s.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
+	if strings.TrimSpace(idempotencyKey) != "" {
+		if len(idempotencyKey) > 256 {
+			return "", fmt.Errorf("idempotency key must be 256 characters or fewer")
+		}
+		req.Header.Set("Idempotency-Key", idempotencyKey)
+	}
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {

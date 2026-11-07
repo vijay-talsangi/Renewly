@@ -24,6 +24,9 @@ func TestSendRenewalReminder(t *testing.T) {
 			if r.Header.Get("Authorization") != "Bearer test-api-key" {
 				t.Error("invalid authorization header")
 			}
+			if r.Header.Get("Idempotency-Key") != "renewal-reminder/test-123" {
+				t.Errorf("unexpected idempotency key: %q", r.Header.Get("Idempotency-Key"))
+			}
 
 			var payload resendEmailRequest
 
@@ -68,7 +71,7 @@ func TestSendRenewalReminder(t *testing.T) {
 		endpoint:   server.URL + "/emails",
 	}
 
-	emailID, err := service.SendRenewalReminder(
+	emailID, err := service.SendRenewalReminderWithIdempotencyKey(
 		context.Background(),
 		RenewalReminder{
 			To:               "vijay@example.com",
@@ -80,6 +83,7 @@ func TestSendRenewalReminder(t *testing.T) {
 			DueDate:          time.Date(2026, 11, 13, 0, 0, 0, 0, time.UTC),
 			DaysUntilDue:     7,
 		},
+		"renewal-reminder/test-123",
 	)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)

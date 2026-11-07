@@ -10,10 +10,16 @@ RUN go mod download
 
 COPY . .
 
+# The same image is used by the Cloud Run API service and reminder job.
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -trimpath \
     -ldflags="-s -w" \
-    -o /renewly .
+    -o /renewly-api .
+
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -trimpath \
+    -ldflags="-s -w" \
+    -o /reminder-worker ./cmd/reminder_worker
 
 # Runtime stage
 FROM alpine:3.22
@@ -24,7 +30,8 @@ RUN apk add --no-cache ca-certificates tzdata \
 
 WORKDIR /app
 
-COPY --from=builder --chown=app:app /renewly /app/renewly
+COPY --from=builder --chown=app:app /renewly-api /app/renewly-api
+COPY --from=builder --chown=app:app /reminder-worker /app/reminder-worker
 
 USER app
 
@@ -33,4 +40,4 @@ ENV GIN_MODE=release
 
 EXPOSE 8080
 
-ENTRYPOINT ["/app/renewly"]
+ENTRYPOINT ["/app/renewly-api"]
