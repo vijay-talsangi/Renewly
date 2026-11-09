@@ -1,0 +1,23 @@
+{{define "content"}}
+<section aria-labelledby="status-heading">
+  <div class="eyebrow">Account</div>
+  <h1 id="status-heading">You're signed in</h1>
+  <p class="lede">Your Renewly browser session is active.</p>
+
+  <div class="account-row">
+    <span class="account-label">Signed in as</span>
+    <span class="account-pill">{{.Email}}</span>
+  </div>
+
+  <p class="muted">
+    You can return to the application that requested access. Signing out here only
+    ends this browser session; it does not revoke access already granted to an
+    external application.
+  </p>
+
+  <form method="post" action="/auth/logout" data-auth-form class="status-actions">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    <button class="btn btn-secondary" type="submit" data-loading-text="Signing out…">Sign out</button>
+  </form>
+</section>
+{{end}}

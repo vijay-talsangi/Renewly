@@ -1,0 +1,8 @@
+{{define "content"}}
+<section aria-labelledby="error-heading">
+  <div class="eyebrow">Something went wrong</div>
+  <h1 id="error-heading">{{.Heading}}</h1>
+  <p class="lede">{{.Message}}</p>
+  <a class="btn btn-primary" href="/auth/login">Go to sign in</a>
+</section>
+{{end}}

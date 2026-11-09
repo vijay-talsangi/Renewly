@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
+	"github.com/jackc/pgx/v5/pgconn"
 	db "github.com/vijay-talsangi/Renewly/db/sqlc"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -16,6 +17,7 @@ import (
 var (
 	ErrInvalidCredentials = errors.New("invalid email or password")
 	ErrMissingJWTSecret   = errors.New("jwt secret is not configured")
+	ErrEmailExists        = errors.New("email is already registered")
 )
 
 type RegisterInput struct {
@@ -48,8 +50,21 @@ func (us *UserService) Register(ctx context.Context, input RegisterInput) error 
 		Email:        input.Email,
 		PasswordHash: string(hashedPassword),
 	})
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return ErrEmailExists
+		}
+		return err
+	}
 
-	return err
+	return nil
+}
+
+// GetByID returns the user for an authenticated browser session. Callers must
+// obtain the ID from a validated session cookie, never from request input.
+func (us *UserService) GetByID(ctx context.Context, id int64) (db.User, error) {
+	return us.q.GetUserByID(ctx, id)
 }
 
 func (us *UserService) Login(
