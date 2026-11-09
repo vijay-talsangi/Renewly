@@ -1,0 +1,50 @@
+{{define "content"}}
+<section aria-labelledby="login-heading">
+  <div class="eyebrow">Welcome back</div>
+  <h1 id="login-heading">Sign in to Renewly</h1>
+  <p class="lede">Use your Renewly account to continue to the access request.</p>
+
+  {{if .Error}}<div class="alert" role="alert">{{.Error}}</div>{{end}}
+
+  <form method="post" action="/auth/login" data-auth-form>
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+
+    <div class="field">
+      <label for="email">Email address</label>
+      <input
+        id="email"
+        name="email"
+        type="email"
+        value="{{.Email}}"
+        placeholder="you@example.com"
+        autocomplete="email"
+        inputmode="email"
+        maxlength="320"
+        required
+        autofocus>
+    </div>
+
+    <div class="field">
+      <label for="password">Password</label>
+      <div class="password-wrap">
+        <input
+          id="password"
+          name="password"
+          type="password"
+          autocomplete="current-password"
+          required>
+        <button
+          type="button"
+          class="password-toggle"
+          data-password-toggle="password"
+          aria-pressed="false"
+          aria-controls="password">Show</button>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" type="submit" data-loading-text="Signing in…">Sign in</button>
+  </form>
+
+  <p class="switch">New to Renewly? <a href="/auth/register">Create an account</a></p>
+</section>
+{{end}}

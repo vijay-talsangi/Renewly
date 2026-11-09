@@ -32,6 +32,7 @@ func setupRouter(queries *db.Queries, pool *pgxpool.Pool) (*gin.Engine, error) {
 
 	userController := controllers.NewUserController(userService)
 	subscriptionController := controllers.NewSubscriptionController(subscriptionService)
+	authPageHandlers := newAuthPages(userService)
 
 	var oauthHandler http.Handler
 	var oauthServer *renewlyoauth.Server
@@ -51,6 +52,24 @@ func setupRouter(queries *db.Queries, pool *pgxpool.Pool) (*gin.Engine, error) {
 		})
 	})
 
+	r.GET("/", func(c *gin.Context) {
+		if _, ok := middleware.UserIDFromCookieRequest(c.Request); ok {
+			c.Redirect(http.StatusSeeOther, "/auth/status")
+			return
+		}
+		c.Redirect(http.StatusSeeOther, "/auth/login")
+	})
+
+	auth := r.Group("/auth")
+	{
+		auth.GET("/login", authPageHandlers.loginPage)
+		auth.POST("/login", authPageHandlers.loginSubmit)
+		auth.GET("/register", authPageHandlers.registerPage)
+		auth.POST("/register", authPageHandlers.registerSubmit)
+		auth.GET("/status", authPageHandlers.statusPage)
+		auth.POST("/logout", authPageHandlers.logout)
+	}
+
 	api := r.Group("/api")
 	{
 		api.POST("/register", userController.Register)
@@ -69,8 +88,11 @@ func setupRouter(queries *db.Queries, pool *pgxpool.Pool) (*gin.Engine, error) {
 
 	if oauthHandler != nil {
 		r.POST("/oauth/register", gin.WrapH(oauthHandler))
-		r.GET("/oauth/authorize", middleware.AuthFromCookie(), gin.WrapH(oauthHandler))
-		r.POST("/oauth/consent", middleware.AuthFromCookie(), gin.WrapH(oauthHandler))
+		// The OAuth handler performs its own session check so it can redirect
+		// unauthenticated browsers to /auth/login instead of returning JSON 401.
+		r.GET("/oauth/authorize", gin.WrapH(oauthHandler))
+		r.GET("/oauth/consent", gin.WrapH(oauthHandler))
+		r.POST("/oauth/consent", gin.WrapH(oauthHandler))
 		r.POST("/oauth/token", gin.WrapH(oauthHandler))
 		r.POST("/oauth/revoke", gin.WrapH(oauthHandler))
 		r.GET("/.well-known/oauth-authorization-server", gin.WrapH(oauthHandler))

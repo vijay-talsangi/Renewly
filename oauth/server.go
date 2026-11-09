@@ -1,6 +1,7 @@
 package oauth
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -9,7 +10,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"html/template"
 	"log"
 	"net/http"
 	"net/url"
@@ -22,6 +22,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/compose"
+	"github.com/vijay-talsangi/Renewly/internal/webui"
 	"github.com/vijay-talsangi/Renewly/middleware"
 )
 
@@ -187,12 +188,25 @@ func (s *Server) RegisterHandler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /oauth/register", s.registerClient)
 	mux.HandleFunc("GET /oauth/authorize", s.authorize)
+	mux.HandleFunc("GET /oauth/consent", s.consentRedirect)
 	mux.HandleFunc("POST /oauth/consent", s.consent)
 	mux.HandleFunc("POST /oauth/token", s.token)
 	mux.HandleFunc("POST /oauth/revoke", s.revoke)
 	mux.HandleFunc("GET /.well-known/oauth-authorization-server", s.authorizationServerMetadata)
 	mux.HandleFunc("GET /.well-known/oauth-protected-resource/mcp", s.protectedResourceMetadata)
 	return mux
+}
+
+// consentRedirect keeps GET /oauth/consent as a safe alias for the
+// authorization endpoint. The real request is always validated by Fosite at
+// /oauth/authorize.
+func (s *Server) consentRedirect(w http.ResponseWriter, r *http.Request) {
+	webui.SetSecurityHeaders(w)
+	target := "/oauth/authorize"
+	if r.URL.RawQuery != "" {
+		target += "?" + r.URL.RawQuery
+	}
+	http.Redirect(w, r, target, http.StatusSeeOther)
 }
 
 func (s *Server) registerClient(w http.ResponseWriter, r *http.Request) {
@@ -214,6 +228,11 @@ func (s *Server) registerClient(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(input.RedirectURIs) == 0 || len(input.RedirectURIs) > 20 {
 		http.Error(w, "between 1 and 20 redirect_uris are required", http.StatusBadRequest)
+		return
+	}
+	clientName := strings.TrimSpace(input.ClientName)
+	if len(clientName) > 200 {
+		http.Error(w, "client_name must be 200 characters or fewer", http.StatusBadRequest)
 		return
 	}
 	if input.TokenEndpointAuthMethod != "" && input.TokenEndpointAuthMethod != "none" {
@@ -268,9 +287,9 @@ func (s *Server) registerClient(w http.ResponseWriter, r *http.Request) {
 	clientID := base64.RawURLEncoding.EncodeToString(idBytes)
 	_, err := s.pool.Exec(r.Context(), `
 		INSERT INTO oauth_clients
-		(client_id, redirect_uris, grant_types, response_types, scopes, audience, is_public)
-		VALUES ($1,$2,$3,$4,$5,$6,TRUE)`,
-		clientID, input.RedirectURIs, grants, responses,
+		(client_id, client_name, redirect_uris, grant_types, response_types, scopes, audience, is_public)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,TRUE)`,
+		clientID, clientName, input.RedirectURIs, grants, responses,
 		[]string{defaultScope, "offline_access"}, []string{s.resource})
 	if err != nil {
 		http.Error(w, "client registration failed", http.StatusInternalServerError)
@@ -282,7 +301,7 @@ func (s *Server) registerClient(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"client_id":                  clientID,
-		"client_name":                input.ClientName,
+		"client_name":                clientName,
 		"redirect_uris":              input.RedirectURIs,
 		"grant_types":                grants,
 		"response_types":             responses,
@@ -326,89 +345,179 @@ func sameSet(got, want []string) bool {
 }
 
 func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
-	userID, ok := middleware.UserIDFromContext(r.Context())
-	if !ok {
-		http.Error(w, "Sign in to Renewly, then retry authorization.", http.StatusUnauthorized)
+	webui.SetSecurityHeaders(w)
+
+	rawQuery := r.URL.RawQuery
+	if rawQuery == "" {
+		// The user has returned from login. Resume the exact authorization
+		// request that was stored before redirecting to /auth/login.
+		if cookie, err := r.Cookie(LoginContinuationCookieName); err == nil && cookie.Value != "" {
+			stored, err := s.consumeLoginContinuation(r.Context(), cookie.Value)
+			if err != nil {
+				log.Printf("oauth login continuation rejected: %v", err)
+			} else {
+				rawQuery = stored
+			}
+			clearLoginContinuationCookie(w)
+		}
+	} else if _, err := r.Cookie(LoginContinuationCookieName); err == nil {
+		// An explicit authorization request takes precedence over a stale
+		// continuation from an earlier attempt.
+		clearLoginContinuationCookie(w)
+	}
+
+	if rawQuery == "" {
+		_ = webui.RenderError(w, http.StatusBadRequest, "Authorization request missing", "Return to the application that sent you here and start the connection again.")
 		return
 	}
-	requester, err := s.provider.NewAuthorizeRequest(r.Context(), r)
-	if err != nil {
-		s.provider.WriteAuthorizeError(r.Context(), w, requester, err)
-		return
-	}
-	issued := strconv.FormatInt(time.Now().Unix(), 10)
-	csrf := s.csrfToken(userID, requester.GetClient().GetID(), requester.GetRequestForm().Get("redirect_uri"), requester.GetRequestForm().Get("state"), issued)
-	data := struct {
-		ClientID   string
-		ClientName string
-		Scopes     []string
-		Fields     []formField
-		Issued     string
-		CSRF       string
-	}{
-		ClientID:   requester.GetClient().GetID(),
-		ClientName: requester.GetClient().GetID(),
-		Scopes:     requester.GetRequestedScopes(),
-		Issued:     issued,
-		CSRF:       csrf,
-	}
-	for key, values := range requester.GetRequestForm() {
-		for _, value := range values {
-			data.Fields = append(data.Fields, formField{Key: key, Value: value})
+
+	authorizeRequest := requestWithRawQuery(r, rawQuery)
+	ctx := authorizeRequest.Context()
+
+	userID, authenticated := middleware.UserIDFromContext(ctx)
+	if !authenticated {
+		userID, authenticated = middleware.UserIDFromCookieRequest(authorizeRequest)
+		if authenticated {
+			ctx = middleware.ContextWithUserID(ctx, userID)
+			authorizeRequest = authorizeRequest.WithContext(ctx)
 		}
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	if err := consentPage.Execute(w, data); err != nil {
-		http.Error(w, "could not render consent page", http.StatusInternalServerError)
+
+	requester, err := s.provider.NewAuthorizeRequest(ctx, authorizeRequest)
+	if err != nil {
+		s.provider.WriteAuthorizeError(ctx, w, requester, err)
+		return
+	}
+	if err := s.validateResourceParameter(requester.GetRequestForm()); err != nil {
+		s.provider.WriteAuthorizeError(ctx, w, requester, err)
+		return
+	}
+
+	if !authenticated {
+		token, err := s.createContinuation(ctx, continuationPurposeLogin, rawQuery, nil)
+		if err != nil {
+			log.Printf("oauth login continuation creation failed: %v", err)
+			_ = webui.RenderError(w, http.StatusInternalServerError, "Authorization unavailable", "We couldn't start the sign-in flow. Return to the application and try again.")
+			return
+		}
+		setLoginContinuationCookie(w, token)
+		http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
+		return
+	}
+
+	email, err := s.userEmail(ctx, userID)
+	if err != nil {
+		log.Printf("oauth consent user lookup failed: %v", err)
+		middleware.ClearAuthCookieWriter(w)
+		_ = webui.RenderError(w, http.StatusBadRequest, "Account unavailable", "Your Renewly session is no longer valid. Sign in again and retry the connection.")
+		return
+	}
+
+	requestToken, err := s.createContinuation(ctx, continuationPurposeConsent, rawQuery, &userID)
+	if err != nil {
+		log.Printf("oauth consent continuation creation failed: %v", err)
+		_ = webui.RenderError(w, http.StatusInternalServerError, "Authorization unavailable", "We couldn't prepare the consent screen. Return to the application and try again.")
+		return
+	}
+
+	issued := strconv.FormatInt(time.Now().Unix(), 10)
+	clientName := s.clientName(ctx, requester.GetClient().GetID())
+	if clientName == "" {
+		clientName = "An application"
+	}
+
+	page := webui.ConsentPage{
+		Base:         webui.Base{Title: "Authorize access", Wide: true},
+		ClientName:   clientName,
+		ClientID:     requester.GetClient().GetID(),
+		UserEmail:    email,
+		Scopes:       scopeViews(requester.GetRequestedScopes()),
+		RequestToken: requestToken,
+		Issued:       issued,
+		CSRF:         s.consentCSRF(userID, requestToken, issued),
+	}
+	if err := webui.Render(w, http.StatusOK, "consent", page); err != nil {
+		log.Printf("oauth consent page render failed: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
 	}
 }
 
-type formField struct{ Key, Value string }
-
-var consentPage = template.Must(template.New("consent").Parse(`<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Authorize Renewly access</title></head>
-<body style="font-family:system-ui;max-width:560px;margin:4rem auto;padding:0 1rem">
-<h1>Connect {{.ClientName}}</h1><p>This application is requesting access to your Renewly account.</p>
-<p><strong>Permissions:</strong> {{range .Scopes}}{{.}} {{end}}</p>
-<form method="post" action="/oauth/consent">
-{{range .Fields}}<input type="hidden" name="{{.Key}}" value="{{.Value}}">{{end}}
-<input type="hidden" name="csrf_ts" value="{{.Issued}}"><input type="hidden" name="csrf_token" value="{{.CSRF}}">
-<button type="submit" name="decision" value="allow">Allow access</button>
-<button type="submit" name="decision" value="deny">Deny</button>
-</form></body></html>`))
-
 func (s *Server) consent(w http.ResponseWriter, r *http.Request) {
-	userID, ok := middleware.UserIDFromContext(r.Context())
-	if !ok {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
-	}
+	webui.SetSecurityHeaders(w)
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "invalid consent request", http.StatusBadRequest)
+		_ = webui.RenderError(w, http.StatusBadRequest, "Invalid consent request", "Return to the application and start the connection again.")
 		return
 	}
-	issued, err := strconv.ParseInt(r.Form.Get("csrf_ts"), 10, 64)
+
+	userID, authenticated := middleware.UserIDFromContext(r.Context())
+	if !authenticated {
+		userID, authenticated = middleware.UserIDFromCookieRequest(r)
+	}
+
+	requestToken := r.PostForm.Get("request_token")
+	if requestToken == "" {
+		_ = webui.RenderError(w, http.StatusBadRequest, "Consent request missing", "Return to the application and start the connection again.")
+		return
+	}
+
+	if !authenticated {
+		// The browser session expired after the consent page was shown.
+		// Preserve the original request through a fresh login continuation.
+		rawQuery, err := s.peekConsentContinuation(r.Context(), requestToken)
+		if err != nil {
+			_ = webui.RenderError(w, http.StatusBadRequest, "Consent request expired", "Return to the application and start the connection again.")
+			return
+		}
+		loginToken, err := s.createContinuation(r.Context(), continuationPurposeLogin, rawQuery, nil)
+		if err != nil {
+			log.Printf("oauth consent re-login continuation failed: %v", err)
+			_ = webui.RenderError(w, http.StatusInternalServerError, "Authorization unavailable", "We couldn't restart the sign-in flow. Return to the application and try again.")
+			return
+		}
+		_ = s.consumeConsentContinuationAnyUser(r.Context(), requestToken)
+		setLoginContinuationCookie(w, loginToken)
+		http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
+		return
+	}
+
+	issued, err := strconv.ParseInt(r.PostForm.Get("csrf_ts"), 10, 64)
 	if err != nil || time.Since(time.Unix(issued, 0)) > 10*time.Minute || time.Unix(issued, 0).After(time.Now().Add(time.Minute)) {
-		http.Error(w, "consent request expired; restart authorization", http.StatusBadRequest)
+		_ = webui.RenderError(w, http.StatusBadRequest, "Consent request expired", "Return to the application and start the connection again.")
 		return
 	}
-	want := s.csrfToken(userID, r.Form.Get("client_id"), r.Form.Get("redirect_uri"), r.Form.Get("state"), r.Form.Get("csrf_ts"))
-	got, _ := hex.DecodeString(r.Form.Get("csrf_token"))
-	wantBytes, _ := hex.DecodeString(want)
-	if !hmac.Equal(got, wantBytes) {
-		http.Error(w, "invalid consent request", http.StatusForbidden)
+
+	want, _ := hex.DecodeString(s.consentCSRF(userID, requestToken, r.PostForm.Get("csrf_ts")))
+	got, _ := hex.DecodeString(r.PostForm.Get("csrf_token"))
+	if !hmac.Equal(got, want) {
+		_ = webui.RenderError(w, http.StatusForbidden, "Request could not be verified", "Refresh the consent page and try again.")
 		return
 	}
-	requester, err := s.provider.NewAuthorizeRequest(r.Context(), r)
+
+	rawQuery, err := s.consumeConsentContinuation(r.Context(), requestToken, userID)
 	if err != nil {
-		s.provider.WriteAuthorizeError(r.Context(), w, requester, err)
+		_ = webui.RenderError(w, http.StatusBadRequest, "Consent request expired", "This authorization request was already used or has expired. Return to the application and try again.")
 		return
 	}
-	if r.Form.Get("decision") != "allow" {
-		s.provider.WriteAuthorizeError(r.Context(), w, requester, fosite.ErrAccessDenied)
+
+	authorizeRequest := requestWithRawQuery(r, rawQuery)
+	ctx := middleware.ContextWithUserID(authorizeRequest.Context(), userID)
+	authorizeRequest = authorizeRequest.WithContext(ctx)
+	requester, err := s.provider.NewAuthorizeRequest(ctx, authorizeRequest)
+	if err != nil {
+		s.provider.WriteAuthorizeError(ctx, w, requester, err)
 		return
 	}
+	if err := s.validateResourceParameter(requester.GetRequestForm()); err != nil {
+		s.provider.WriteAuthorizeError(ctx, w, requester, err)
+		return
+	}
+
+	if r.PostForm.Get("decision") != "allow" {
+		s.provider.WriteAuthorizeError(ctx, w, requester, fosite.ErrAccessDenied)
+		return
+	}
+
 	// Explicitly grant only the scopes Renewly supports. Fosite does not
 	// infer consent merely because scopes were requested.
 	for _, scope := range requester.GetRequestedScopes() {
@@ -417,28 +526,56 @@ func (s *Server) consent(w http.ResponseWriter, r *http.Request) {
 			requester.GrantScope(scope)
 		}
 	}
-	// Grant access to the Renewly MCP resource.
+
+	// Grant access to the Renewly MCP resource. The stored request is
+	// authoritative, so a tampered POST body cannot redirect the audience.
 	if !containsString(requester.GetClient().GetAudience(), s.resource) {
-		s.provider.WriteAuthorizeError(
-			r.Context(), w, requester, fosite.ErrInvalidRequest,
-		)
+		s.provider.WriteAuthorizeError(ctx, w, requester, fosite.ErrInvalidRequest)
 		return
 	}
 
 	requester.GrantAudience(s.resource)
 	session := &fosite.DefaultSession{Subject: strconv.FormatInt(userID, 10)}
-	response, err := s.provider.NewAuthorizeResponse(r.Context(), requester, session)
+	response, err := s.provider.NewAuthorizeResponse(ctx, requester, session)
 	if err != nil {
-		s.provider.WriteAuthorizeError(r.Context(), w, requester, err)
+		s.provider.WriteAuthorizeError(ctx, w, requester, err)
 		return
 	}
-	s.provider.WriteAuthorizeResponse(r.Context(), w, requester, response)
+	s.provider.WriteAuthorizeResponse(ctx, w, requester, response)
 }
 
-func (s *Server) csrfToken(userID int64, clientID, redirectURI, state, issued string) string {
+// validateResourceParameter rejects an authorization request that targets any
+// resource other than this server's MCP endpoint. The resource value is kept
+// in the server-side continuation query and revalidated at consent time.
+func (s *Server) validateResourceParameter(form url.Values) error {
+	for _, resource := range form["resource"] {
+		if strings.TrimSpace(resource) != s.resource {
+			return fosite.ErrInvalidRequest.WithHint("The requested resource is not supported by this authorization server.")
+		}
+	}
+	return nil
+}
+
+func (s *Server) consentCSRF(userID int64, requestToken, issued string) string {
 	mac := hmac.New(sha256.New, s.csrfKey)
-	_, _ = fmt.Fprintf(mac, "%d\n%s\n%s\n%s\n%s", userID, clientID, redirectURI, state, issued)
+	_, _ = fmt.Fprintf(mac, "consent\n%d\n%s\n%s", userID, requestToken, issued)
 	return hex.EncodeToString(mac.Sum(nil))
+}
+
+func (s *Server) clientName(ctx context.Context, clientID string) string {
+	var name string
+	if err := s.pool.QueryRow(ctx,
+		`SELECT client_name FROM oauth_clients WHERE client_id = $1`, clientID,
+	).Scan(&name); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(name)
+}
+
+func (s *Server) userEmail(ctx context.Context, userID int64) (string, error) {
+	var email string
+	err := s.pool.QueryRow(ctx, `SELECT email FROM users WHERE id = $1`, userID).Scan(&email)
+	return email, err
 }
 
 func (s *Server) token(w http.ResponseWriter, r *http.Request) {

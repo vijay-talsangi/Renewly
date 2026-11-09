@@ -15,7 +15,9 @@ import (
 	"github.com/vijay-talsangi/Renewly/internal/server"
 )
 
-func setupTestApp(t *testing.T) *gin.Engine {
+// setupTestPool opens the configured test database and applies all migrations.
+// The caller owns any test-specific truncation and environment setup.
+func setupTestPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	if err := godotenv.Load("../.env"); err != nil {
 		t.Log("No .env file found; using environment variables")
@@ -53,8 +55,16 @@ func setupTestApp(t *testing.T) *gin.Engine {
 		t.Fatalf("failed to run migrations: %v", err)
 	}
 
+	return pool
+}
+
+func setupTestApp(t *testing.T) *gin.Engine {
+	t.Helper()
+	pool := setupTestPool(t)
+	ctx := context.Background()
+
 	// Safe because we have explicitly checked the database name.
-	_, err = pool.Exec(
+	_, err := pool.Exec(
 		ctx,
 		"TRUNCATE TABLE subscriptions, users RESTART IDENTITY CASCADE",
 	)

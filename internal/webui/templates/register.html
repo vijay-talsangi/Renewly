@@ -1,0 +1,89 @@
+{{define "content"}}
+<section aria-labelledby="register-heading">
+  <div class="eyebrow">Create your account</div>
+  <h1 id="register-heading">Get started with Renewly</h1>
+  <p class="lede">Create a Renewly account to review and approve the connection.</p>
+
+  {{if .Error}}<div class="alert" role="alert">{{.Error}}</div>{{end}}
+
+  <form method="post" action="/auth/register" data-auth-form data-register-form>
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+
+    <div class="field">
+      <label for="name">Full name</label>
+      <input
+        id="name"
+        name="name"
+        type="text"
+        value="{{.Name}}"
+        placeholder="Your name"
+        autocomplete="name"
+        maxlength="200"
+        required
+        autofocus>
+    </div>
+
+    <div class="field">
+      <label for="email">Email address</label>
+      <input
+        id="email"
+        name="email"
+        type="email"
+        value="{{.Email}}"
+        placeholder="you@example.com"
+        autocomplete="email"
+        inputmode="email"
+        maxlength="320"
+        required>
+    </div>
+
+    <div class="field">
+      <label for="password">Password</label>
+      <div class="password-wrap">
+        <input
+          id="password"
+          name="password"
+          type="password"
+          autocomplete="new-password"
+          minlength="6"
+          maxlength="72"
+          aria-describedby="password-hint"
+          required>
+        <button
+          type="button"
+          class="password-toggle"
+          data-password-toggle="password"
+          aria-pressed="false"
+          aria-controls="password">Show</button>
+      </div>
+      <p class="hint" id="password-hint">Use at least 6 characters.</p>
+    </div>
+
+    <div class="field">
+      <label for="confirm_password">Confirm password</label>
+      <div class="password-wrap">
+        <input
+          id="confirm_password"
+          name="confirm_password"
+          type="password"
+          autocomplete="new-password"
+          minlength="6"
+          maxlength="72"
+          aria-describedby="confirm-password-error"
+          required>
+        <button
+          type="button"
+          class="password-toggle"
+          data-password-toggle="confirm_password"
+          aria-pressed="false"
+          aria-controls="confirm_password">Show</button>
+      </div>
+      <p class="field-error" id="confirm-password-error" hidden></p>
+    </div>
+
+    <button class="btn btn-primary" type="submit" data-loading-text="Creating account…">Create account</button>
+  </form>
+
+  <p class="switch">Already have an account? <a href="/auth/login">Sign in</a></p>
+</section>
+{{end}}
