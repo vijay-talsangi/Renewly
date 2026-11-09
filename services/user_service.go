@@ -1,3 +1,4 @@
+// Package services contains all working of every services
 package services
 
 import (
@@ -51,22 +52,20 @@ func (us *UserService) Register(ctx context.Context, input RegisterInput) error 
 	return err
 }
 
-func (us *UserService) Login(ctx context.Context, input LoginInput) (string, error) {
-	user, err := us.q.GetUserByEmail(ctx, input.Email)
-	if err != nil {
-		return "", ErrInvalidCredentials
-	}
-
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(input.Password)); err != nil {
-		return "", ErrInvalidCredentials
-	}
-
-	token, err := signJWT(user.ID)
+func (us *UserService) Login(
+	ctx context.Context,
+	input LoginInput,
+) (string, error) {
+	userID, err := us.AuthenticateCredentials(
+		ctx,
+		input.Email,
+		input.Password,
+	)
 	if err != nil {
 		return "", err
 	}
 
-	return token, nil
+	return signJWT(userID)
 }
 
 func signJWT(userID int64) (string, error) {
@@ -86,4 +85,24 @@ func signJWT(userID int64) (string, error) {
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(secret))
+}
+
+func (us *UserService) AuthenticateCredentials(
+	ctx context.Context,
+	email string,
+	password string,
+) (int64, error) {
+	user, err := us.q.GetUserByEmail(ctx, email)
+	if err != nil {
+		return 0, ErrInvalidCredentials
+	}
+
+	if err := bcrypt.CompareHashAndPassword(
+		[]byte(user.PasswordHash),
+		[]byte(password),
+	); err != nil {
+		return 0, ErrInvalidCredentials
+	}
+
+	return user.ID, nil
 }

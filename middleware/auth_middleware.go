@@ -22,6 +22,12 @@ func UserIDFromContext(ctx context.Context) (int64, bool) {
 	return userID, ok && userID > 0
 }
 
+// ContextWithUserID attaches an authenticated Renewly user ID to a request context.
+// OAuth bearer authentication uses the same context key as cookie authentication.
+func ContextWithUserID(ctx context.Context, userID int64) context.Context {
+	return context.WithValue(ctx, userIDContextKey, userID)
+}
+
 func AuthFromCookie() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenStr, err := c.Cookie("auth_token")

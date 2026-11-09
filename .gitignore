@@ -47,3 +47,13 @@ test/*.db
 # Config files
 config.yaml
 config.test.yaml
+
+auth_code.txt
+consent-headers.txt
+consent.html
+cookies.txt
+mcp-headers.txt
+mcp-response.txt
+test-oauth-mcp.sh
+token-response.json
+

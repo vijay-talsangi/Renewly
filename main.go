@@ -38,7 +38,10 @@ func main() {
 	log.Println("PostgreSQL connection pool initialized successfully!")
 
 	queries := db.New(pool)
-	router := server.SetupRouter(queries)
+	router, err := server.SetupRouterWithPool(queries, pool)
+	if err != nil {
+		log.Fatalf("OAuth/server initialization failed: %v", err)
+	}
 
 	port := os.Getenv("PORT")
 	if port == "" {
