@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vijay-talsangi/Renewly/controllers"
 	db "github.com/vijay-talsangi/Renewly/db/sqlc"
+	renewlymcp "github.com/vijay-talsangi/Renewly/mcp"
 	"github.com/vijay-talsangi/Renewly/middleware"
 	"github.com/vijay-talsangi/Renewly/services"
 )
@@ -40,6 +41,13 @@ func SetupRouter(queries *db.Queries) *gin.Engine {
 		authorized.GET("/subscriptions", subscriptionController.GetAllSubscriptions)
 		authorized.PUT("/subscriptions/:id", subscriptionController.UpdateSubscription)
 	}
+	mcpHandler := renewlymcp.NewHTTPHandler(queries)
+
+	r.Any(
+		"/mcp",
+		middleware.AuthFromCookie(),
+		gin.WrapH(mcpHandler),
+	)
 
 	return r
 }
