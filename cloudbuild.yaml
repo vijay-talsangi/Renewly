@@ -38,9 +38,8 @@ steps:
       - --min=0
       - --max=3
       - --timeout=60
-      - --set-env-vars=GIN_MODE=release,COOKIE_SECURE=true,DB_POOL_MAX_CONNS=5,DB_POOL_MIN_CONNS=0,EMAIL_FROM=${_EMAIL_FROM}
-      - --set-secrets=DATABASE_URL=renewly-database-url:latest,JWT_SECRET=renewly-jwt-secret:latest
-
+      - --set-env-vars=GIN_MODE=release,COOKIE_SECURE=true,DB_POOL_MAX_CONNS=5,DB_POOL_MIN_CONNS=0,EMAIL_FROM=${_EMAIL_FROM},OAUTH_ISSUER=https://renewly-api-255909527631.asia-south1.run.app
+      - --set-secrets=DATABASE_URL=renewly-database-url:latest,JWT_SECRET=renewly-jwt-secret:latest,OAUTH_GLOBAL_SECRET=oauth-global-secret:latest
 
   # 5. Deploy/update the reminder worker Cloud Run Job using the same image
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
@@ -68,7 +67,7 @@ substitutions:
   _AR_REPO: renewly-repo
   _SERVICE: renewly-api
   _RUNTIME_SA: renewly-runtime@gen-lang-client-0644475723.iam.gserviceaccount.com
-  _EMAIL_FROM: 'Renewly Reminders <renewly-reminders@vebit.app>'
+  _EMAIL_FROM: "Renewly Reminders <renewly-reminders@vebit.app>"
 
 options:
   logging: CLOUD_LOGGING_ONLY

@@ -25,3 +25,13 @@ vendor/
 
 # Documentation
 README.md
+
+# Local OAuth/MCP test artifacts
+auth_code.txt
+consent-headers.txt
+cookies.txt
+mcp-headers.txt
+mcp-response.txt
+token-response.json
+test-oauth-mcp.sh
+consent.html
