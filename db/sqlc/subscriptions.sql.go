@@ -181,6 +181,66 @@ func (q *Queries) ListSubscriptions(ctx context.Context, userID int64) ([]Subscr
 	return items, nil
 }
 
+const listUpcomingBills = `-- name: ListUpcomingBills :many
+SELECT
+    id,
+    name,
+    category,
+    amount::text AS amount,
+    currency,
+    billing_cycle,
+    next_billing_date
+FROM subscriptions
+WHERE user_id = $1
+  AND status = 'active'
+  AND next_billing_date >= CURRENT_DATE
+  AND next_billing_date <= CURRENT_DATE + $2::integer
+ORDER BY next_billing_date ASC
+`
+
+type ListUpcomingBillsParams struct {
+	UserID    int64
+	DaysAhead int32
+}
+
+type ListUpcomingBillsRow struct {
+	ID              int64
+	Name            string
+	Category        string
+	Amount          string
+	Currency        string
+	BillingCycle    BillingCycle
+	NextBillingDate pgtype.Date
+}
+
+func (q *Queries) ListUpcomingBills(ctx context.Context, arg ListUpcomingBillsParams) ([]ListUpcomingBillsRow, error) {
+	rows, err := q.db.Query(ctx, listUpcomingBills, arg.UserID, arg.DaysAhead)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListUpcomingBillsRow
+	for rows.Next() {
+		var i ListUpcomingBillsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Category,
+			&i.Amount,
+			&i.Currency,
+			&i.BillingCycle,
+			&i.NextBillingDate,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateSubscription = `-- name: UpdateSubscription :one
 UPDATE subscriptions
 SET

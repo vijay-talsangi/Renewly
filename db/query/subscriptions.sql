@@ -55,3 +55,19 @@ SET
     updated_at = NOW()
 WHERE id = $1
 AND user_id = $2;
+
+-- name: ListUpcomingBills :many
+SELECT
+    id,
+    name,
+    category,
+    amount::text AS amount,
+    currency,
+    billing_cycle,
+    next_billing_date
+FROM subscriptions
+WHERE user_id = sqlc.arg(user_id)
+  AND status = 'active'
+  AND next_billing_date >= CURRENT_DATE
+  AND next_billing_date <= CURRENT_DATE + sqlc.arg(days_ahead)::integer
+ORDER BY next_billing_date ASC;
