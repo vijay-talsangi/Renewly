@@ -208,7 +208,6 @@ func (s *Server) registerClient(w http.ResponseWriter, r *http.Request) {
 		TokenEndpointAuthMethod string   `json:"token_endpoint_auth_method"`
 	}
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 32<<10))
-	dec.DisallowUnknownFields()
 	if err := dec.Decode(&input); err != nil {
 		http.Error(w, "invalid registration request", http.StatusBadRequest)
 		return
@@ -231,8 +230,26 @@ func (s *Server) registerClient(w http.ResponseWriter, r *http.Request) {
 	if len(grants) == 0 {
 		grants = []string{"authorization_code", "refresh_token"}
 	}
-	if !sameSet(grants, []string{"authorization_code", "refresh_token"}) {
-		http.Error(w, "only authorization_code and refresh_token grants are supported", http.StatusBadRequest)
+	supportedGrants := map[string]bool{
+		"authorization_code": true,
+		"refresh_token":      true,
+	}
+
+	hasAuthorizationCode := false
+
+	for _, grant := range grants {
+		if !supportedGrants[grant] {
+			http.Error(w, "unsupported grant type", http.StatusBadRequest)
+			return
+		}
+
+		if grant == "authorization_code" {
+			hasAuthorizationCode = true
+		}
+	}
+
+	if !hasAuthorizationCode {
+		http.Error(w, "authorization_code grant is required", http.StatusBadRequest)
 		return
 	}
 	responses := input.ResponseTypes
