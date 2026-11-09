@@ -11,17 +11,26 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const cancelSubscription = `-- name: CancelSubscription :exec
+const cancelSubscription = `-- name: CancelSubscription :execrows
 UPDATE subscriptions
 SET
-status='cancelled',
-updated_at=NOW()
-WHERE id=$1
+    status = 'cancelled',
+    updated_at = NOW()
+WHERE id = $1
+AND user_id = $2
 `
 
-func (q *Queries) CancelSubscription(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, cancelSubscription, id)
-	return err
+type CancelSubscriptionParams struct {
+	ID     int64
+	UserID int64
+}
+
+func (q *Queries) CancelSubscription(ctx context.Context, arg CancelSubscriptionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, cancelSubscription, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const createSubscription = `-- name: CreateSubscription :one
@@ -96,11 +105,17 @@ func (q *Queries) CreateSubscription(ctx context.Context, arg CreateSubscription
 const getSubscription = `-- name: GetSubscription :one
 SELECT id, user_id, name, category, amount, currency, billing_cycle, start_date, next_billing_date, auto_renew, website, notes, status, created_at, updated_at
 FROM subscriptions
-WHERE id=$1
+WHERE id = $1
+AND user_id = $2
 `
 
-func (q *Queries) GetSubscription(ctx context.Context, id int64) (Subscription, error) {
-	row := q.db.QueryRow(ctx, getSubscription, id)
+type GetSubscriptionParams struct {
+	ID     int64
+	UserID int64
+}
+
+func (q *Queries) GetSubscription(ctx context.Context, arg GetSubscriptionParams) (Subscription, error) {
+	row := q.db.QueryRow(ctx, getSubscription, arg.ID, arg.UserID)
 	var i Subscription
 	err := row.Scan(
 		&i.ID,

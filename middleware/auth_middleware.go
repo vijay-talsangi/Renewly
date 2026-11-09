@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"os"
@@ -11,6 +12,15 @@ import (
 )
 
 const ContextUserIDKey = "userID"
+
+type contextKey string
+
+const userIDContextKey contextKey = "authenticatedUserID"
+
+func UserIDFromContext(ctx context.Context) (int64, bool) {
+	userID, ok := ctx.Value(userIDContextKey).(int64)
+	return userID, ok && userID > 0
+}
 
 func AuthFromCookie() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -46,6 +56,9 @@ func AuthFromCookie() gin.HandlerFunc {
 		}
 
 		c.Set(ContextUserIDKey, userID)
+		c.Request = c.Request.WithContext(
+			context.WithValue(c.Request.Context(), userIDContextKey, userID),
+		)
 		c.Next()
 	}
 }

@@ -20,7 +20,8 @@ RETURNING *;
 -- name: GetSubscription :one
 SELECT *
 FROM subscriptions
-WHERE id=$1;
+WHERE id = $1
+AND user_id = $2;
 
 -- name: ListSubscriptions :many
 SELECT *
@@ -47,9 +48,10 @@ WHERE id=$1
 AND user_id=$12
 RETURNING *;
 
--- name: CancelSubscription :exec
+-- name: CancelSubscription :execrows
 UPDATE subscriptions
 SET
-status='cancelled',
-updated_at=NOW()
-WHERE id=$1;
+    status = 'cancelled',
+    updated_at = NOW()
+WHERE id = $1
+AND user_id = $2;
