@@ -436,7 +436,15 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 		Issued:       issued,
 		CSRF:         s.consentCSRF(userID, requestToken, issued),
 	}
-	if err := webui.Render(w, http.StatusOK, "consent", page); err != nil {
+	// The consent form posts to this server but the response then redirects to
+	// the client's callback. Browsers apply form-action to those redirects, so
+	// the client origin must be allowed or the browser stays on the consent
+	// page while the one-time request token has already been consumed.
+	var formAction string
+	if redirectURI := requester.GetRedirectURI(); redirectURI != nil {
+		formAction = redirectURI.String()
+	}
+	if err := webui.RenderWithFormActions(w, http.StatusOK, "consent", page, formAction); err != nil {
 		log.Printf("oauth consent page render failed: %v", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 	}

@@ -315,6 +315,15 @@ func TestOAuthWebRegistrationConsentAndTokenFlow(t *testing.T) {
 	csrfTS := hiddenInput(t, consentBody, "csrf_ts")
 	consentCSRF := hiddenInput(t, consentBody, "csrf_token")
 
+	// Browsers apply form-action to redirects after a form POST. The consent
+	// form posts locally and then redirects to the client callback, so the
+	// callback origin must be explicitly allowed or Chrome blocks the redirect
+	// and leaves the user on a page whose one-time token was already consumed.
+	csp := recorder.Header().Get("Content-Security-Policy")
+	if !strings.Contains(csp, "form-action 'self' http://127.0.0.1:8765;") {
+		t.Errorf("consent CSP does not allow the client callback origin: %q", csp)
+	}
+
 	// 7. A tampered CSRF token is rejected and does not consume the request.
 	recorder = doForm(router, "/oauth/consent", url.Values{
 		"request_token": {requestToken},
