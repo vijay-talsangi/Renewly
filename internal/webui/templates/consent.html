@@ -1,0 +1,64 @@
+{{define "content"}}
+<section aria-labelledby="consent-heading">
+  <div class="eyebrow">Connection request</div>
+  <h1 id="consent-heading">{{.ClientName}} wants to connect to Renewly</h1>
+  <p class="lede">Review what this application is asking to do with your Renewly account.</p>
+
+  <div class="account-row">
+    <span class="account-label">Signed in as</span>
+    <span class="account-pill">{{.UserEmail}}</span>
+  </div>
+
+  {{if .ClientID}}<p class="client-id">Client ID: {{.ClientID}}</p>{{end}}
+
+  <div class="permissions">
+    <h2>Requested permissions</h2>
+    {{range .Scopes}}
+      <div class="scope">
+        <div class="scope-head">
+          <span class="scope-name">{{.Label}}</span>
+          {{if .Offline}}<span class="badge">Offline access</span>{{end}}
+        </div>
+        {{if .Description}}<p class="scope-desc">{{.Description}}</p>{{end}}
+        {{if .Read}}
+          <div class="scope-group">
+            <span class="badge badge--read">Read</span>
+            <ul>
+              {{range .Read}}<li>{{.}}</li>{{end}}
+            </ul>
+          </div>
+        {{end}}
+        {{if .Write}}
+          <div class="scope-group">
+            <span class="badge badge--write">Write</span>
+            <ul>
+              {{range .Write}}<li>{{.}}</li>{{end}}
+            </ul>
+          </div>
+        {{end}}
+      </div>
+    {{else}}
+      <p class="scope-desc">This application will receive basic access to your Renewly account.</p>
+    {{end}}
+  </div>
+
+  {{if .Error}}<div class="alert" role="alert">{{.Error}}</div>{{end}}
+
+  <form method="post" action="/oauth/consent" data-auth-form>
+    <input type="hidden" name="request_token" value="{{.RequestToken}}">
+    <input type="hidden" name="csrf_ts" value="{{.Issued}}">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+
+    <div class="actions">
+      <button class="btn btn-primary" type="submit" name="decision" value="allow" data-loading-text="Connecting…">Allow access</button>
+      <button class="btn btn-secondary" type="submit" name="decision" value="deny" formnovalidate data-loading-text="Denying…">Deny</button>
+    </div>
+  </form>
+
+  <p class="security-note">
+    <strong>You are in control.</strong> Only allow access if you recognize this
+    application. You can revoke this access later. Removing the connection in the
+    application will stop it from using your Renewly account.
+  </p>
+</section>
+{{end}}

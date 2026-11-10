@@ -50,7 +50,7 @@ config.test.yaml
 
 auth_code.txt
 consent-headers.txt
-consent.html
+/consent.html
 cookies.txt
 mcp-headers.txt
 mcp-response.txt
