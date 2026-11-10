@@ -34,4 +34,4 @@ mcp-headers.txt
 mcp-response.txt
 token-response.json
 test-oauth-mcp.sh
-consent.html
+/consent.html
