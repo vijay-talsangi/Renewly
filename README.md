@@ -10,13 +10,9 @@ A user signs in with an email and password, adds subscriptions, and connects an 
 
 ## MCP server URL
 
-Paste the public endpoint of your deployed Renewly MCP server here:
+**MCP Server URL:** `https://renewly-api-255909527631.asia-south1.run.app/mcp`
 
-> **MCP Server URL:** `https://renewly-api-255909527631.asia-south1.run.app/mcp`
->
-> Example: `https://renewly.example.com/mcp`
-
-Use that URL when configuring Claude or any other MCP client. It must be a public **HTTPS** URL for hosted clients.
+Use this URL when configuring Claude or any other MCP client.
 
 ---
 
